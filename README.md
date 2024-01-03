@@ -4,7 +4,6 @@ A simple script to solve the 4=10 puzzles: [app in Google Play](https://play.goo
 
 ## Future work
 
-- Solve the TODO comment.
 - Convert this into a server that can solve the puzzles.
 
 ## Origin
