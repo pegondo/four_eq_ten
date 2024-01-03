@@ -1,9 +1,34 @@
+from enum import Enum
 from simpleai.search import SearchProblem
 from itertools import permutations, product
 
 
 VALID_OPERATORS = ["+", "-", "*", "/"]
 VALID_BRACKETS = [[0, 1], [0, 2], [1, 2], [1, 3], [2, 3]]
+
+VALID_NUMBERS_SWAP = [[0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]]
+
+
+class ActionType(Enum):
+    SWAP_NUMBERS = 1
+    CHANGE_OPERATOR = 2
+    ADD_BRACKETS = 3
+
+
+class Action:
+    def __init__(self, action: ActionType, index, target=None):
+        self.action = action
+        self.index = index
+        self.target = target
+
+    def __str__(self):
+        if self.action == ActionType.SWAP_NUMBERS:
+            return f"Swap number in pos {self.index[0]} to pos {self.index[1]}"
+        if self.action == ActionType.CHANGE_OPERATOR:
+            return f"Change operator in pos {self.index} to {self.target}"
+        if self.action == ActionType.ADD_BRACKETS:
+            return f"Add brackets in {self.index}"
+        return "Invalid action"
 
 
 class State:
@@ -49,23 +74,70 @@ class State:
         res = res[:first] + "(" + res[first:last] + ")" + res[last:]
         return res
 
+    def __get_operator(self, index):
+        return self.operators[index]
+
+    def __get_brackets(self):
+        return self.brackets
+
     def calculate(self):
         str = self.__format()
-        return eval(str)
+        try:
+            return eval(str)
+        except:
+            return None
 
     def actions(self, allowed_operators):
-        numbers_combinations = list(permutations(self.numbers))
-        operators_combinations = list(product(allowed_operators, repeat=3))
-        brackets_combinations = VALID_BRACKETS + [None]
-
         actions = []
-        for numbers in numbers_combinations:
-            for operators in operators_combinations:
-                for brackets in brackets_combinations:
-                    state = State(numbers, operators, brackets)
-                    actions.append(state)
-        actions.remove(self)  # Remove this same state.
+
+        # Swap numbers.
+        for swaps in VALID_NUMBERS_SWAP:
+            action = Action(ActionType.SWAP_NUMBERS, index=swaps)
+            actions.append(action)
+        # Change operator.
+        for op_index in range(3):
+            for op in allowed_operators:
+                if self.__get_operator(op_index) != op:
+                    action = Action(
+                        ActionType.CHANGE_OPERATOR, index=op_index, target=op
+                    )
+                    actions.append(action)
+        # Change bracket.
+        current_brackets = self.__get_brackets()
+        for bracket in VALID_BRACKETS:
+            if (None if current_brackets is None else list(current_brackets)) != list(
+                bracket
+            ):
+                action = Action(ActionType.ADD_BRACKETS, index=bracket)
+                actions.append(action)
+        if current_brackets is not None:
+            action = Action(ActionType.ADD_BRACKETS, index=None)
+        actions.append(action)
+
         return actions
+
+    def result(self, action: Action):
+        numbers = self.numbers.copy()
+        operators = self.operators.copy()
+        brackets = None if self.brackets is None else self.brackets.copy()
+
+        # Swap numbers.
+        if action.action == ActionType.SWAP_NUMBERS:
+            numbers[action.index[0]], numbers[action.index[1]] = (
+                numbers[action.index[1]],
+                numbers[action.index[0]],
+            )
+            return State(numbers, operators, brackets)
+        # Change operator.
+        if action.action == ActionType.CHANGE_OPERATOR:
+            operators[action.index] = action.target
+            return State(numbers, operators, brackets)
+        # Change bracket.
+        if action.action == ActionType.ADD_BRACKETS:
+            brackets = action.index
+            return State(numbers, operators, brackets)
+
+        return None
 
 
 class Game(SearchProblem):
@@ -76,12 +148,8 @@ class Game(SearchProblem):
     def actions(self, state: State):
         return state.actions(self.allowed_operators)
 
-    def result(self, state, action):
-        # TODO: FIX THIS!!
-        # The result is the action itself.
-        # The actions should list what operations can be performed, and the result should perform them.
-        # E.g: (state: 1+2+3, action: 'change first operation to `-`) -> 1-2+3
-        return action
+    def result(self, state: State, action: Action):
+        return state.result(action)
 
     def is_goal(self, state: State):
         return state.calculate() == 10
